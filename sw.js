@@ -1,5 +1,5 @@
-const CACHE = 'cua-minh-v2';
-const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png'];
+const CACHE = 'cua-minh-v3';
+const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png', './bg.jpg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
