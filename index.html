@@ -79,6 +79,24 @@ nav button.active{color:var(--accent);font-weight:600}
   background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
 .empty{text-align:center;margin-top:20vh;color:var(--muted)}
 .empty .ic{font-size:56px}
+
+/* Map tab */
+.title{margin:0 0 14px;font-size:26px;text-align:center}
+#map{height:46vh;min-height:300px;border-radius:20px;overflow:hidden;margin-bottom:14px;
+  box-shadow:0 4px 18px rgba(255,92,138,.18);background:rgba(255,255,255,.4);z-index:0;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:0}
+.pin{font-size:28px;line-height:1;text-align:center;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.leaflet-popup-content{font-family:inherit;color:#4a1d2e}
+.place{display:flex;flex-direction:column;gap:6px}
+.place .pname{font-weight:700;font-size:17px}
+.place .pnote{font-size:14px;color:var(--muted)}
+.place .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.place .acts a,.place .acts button{
+  font:inherit;font-size:13px;padding:7px 12px;border-radius:99px;border:1px solid rgba(255,92,138,.35);
+  background:transparent;color:var(--accent);text-decoration:none}
+.place .acts .del{color:#d33;border-color:rgba(221,51,51,.35)}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(255,92,138,.4)}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.5}
 </style>
 </head>
 <body>
@@ -127,18 +145,31 @@ nav button.active{color:var(--accent);font-weight:600}
     </div>
   </section>
 
-  <!-- TAB 2: chỗ trống cho tính năng sau -->
-  <section class="tab" id="tab-more">
-    <div class="empty">
-      <div class="ic">✨</div>
-      <p>Tính năng mới sẽ xuất hiện ở đây</p>
+  <!-- TAB 2: Bản đồ quán ăn -->
+  <section class="tab" id="tab-map">
+    <h2 class="title">🍜 Quán ngon</h2>
+    <div id="map">Đang tải bản đồ…</div>
+
+    <div class="card">
+      <h3 id="formTitle">Thêm quán</h3>
+      <div class="settings">
+        <div><label>Tên quán</label><input id="pName" placeholder="VD: Phở Hòa Pasteur"></div>
+        <div><label>Toạ độ (copy từ Google Maps)</label><input id="pLL" placeholder="10.7769, 106.7009" autocapitalize="off" autocorrect="off"></div>
+        <div><label>Ghi chú (không bắt buộc)</label><input id="pNote" placeholder="Món nên gọi, giá, giờ mở cửa..."></div>
+        <button class="btn" id="pSave">Thêm vào bản đồ</button>
+        <button class="btn ghost" id="pCancel" style="display:none">Huỷ sửa</button>
+        <div class="small" id="pMsg"></div>
+        <div class="hint">Cách lấy toạ độ: trong Google Maps, nhấn giữ lên điểm cần ghim, rồi bấm vào dòng số (vd 10.7769, 106.7009) để sao chép. Dán vào ô trên. Dán cả link Google Maps có chứa @vĩ độ,kinh độ cũng được.</div>
+      </div>
     </div>
+
+    <div id="placeList"></div>
   </section>
 </main>
 
 <nav>
   <button class="active" data-tab="tab-love"><span class="ic">💗</span>Yêu nhau</button>
-  <button data-tab="tab-more"><span class="ic">✨</span>Sắp có</button>
+  <button data-tab="tab-map"><span class="ic">🍜</span>Quán ngon</button>
 </nav>
 
 <script>
@@ -149,9 +180,9 @@ function showTab(id){
   tabs.forEach(t => t.classList.toggle('active', t.id === id));
   btns.forEach(b => b.classList.toggle('active', b.dataset.tab === id));
   try{ localStorage.setItem('lastTab', id); }catch(e){}
+  if(id === 'tab-map') openMapTab();
 }
 btns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
-try{ const t = localStorage.getItem('lastTab'); if(t && document.getElementById(t)) showTab(t); }catch(e){}
 
 // ---------- Settings ----------
 const DEFAULTS = { n1:'', n2:'', start:'2023-04-06' };
@@ -244,6 +275,174 @@ render();
 // Cập nhật khi qua nửa đêm / mở lại app
 document.addEventListener('visibilitychange', () => { if(!document.hidden) render(); });
 setInterval(render, 60000);
+
+// ---------- Map ----------
+var map = null, leafletP = null, markerLayer = null;
+let places = [];
+try{ places = JSON.parse(localStorage.getItem('places') || '[]'); }catch(e){ places = []; }
+let editId = null;
+
+function savePlaces(){ try{ localStorage.setItem('places', JSON.stringify(places)); }catch(e){} }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function gmapsLink(p){ return 'https://www.google.com/maps/search/?api=1&query=' + p.lat + ',' + p.lng; }
+
+// Hỗ trợ "10.7769, 106.7009", "10.7769 106.7009" hoặc link Google Maps (@lat,lng / !3dlat!4dlng)
+function parseLL(str){
+  str = (str || '').trim();
+  const m = str.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/)
+         || str.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/)
+         || str.match(/(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/);
+  if(!m) return null;
+  const lat = +m[1], lng = +m[2];
+  if(Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return {lat, lng};
+}
+
+function loadLeaflet(){
+  if(window.L) return Promise.resolve();
+  if(leafletP) return leafletP;
+  leafletP = new Promise((res, rej) => {
+    if(!document.getElementById('leaflet-css')){
+      const css = document.createElement('link');
+      css.id = 'leaflet-css'; css.rel = 'stylesheet';
+      css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(css);
+    }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload = res;
+    s.onerror = () => { leafletP = null; rej(); };
+    document.head.appendChild(s);
+  });
+  return leafletP;
+}
+
+function initMap(){
+  if(map) return;
+  const el = $('map');
+  el.textContent = '';
+  el.style.display = 'block';
+  map = L.map(el).setView([16.0, 106.0], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+  drawMarkers();
+  fitAll();
+}
+
+function drawMarkers(){
+  if(!map) return;
+  markerLayer.clearLayers();
+  const icon = L.divIcon({className:'pin', html:'🍜', iconSize:[30,30], iconAnchor:[15,28], popupAnchor:[0,-26]});
+  places.forEach(p => {
+    const html = '<b>' + esc(p.name) + '</b>' + (p.note ? '<br>' + esc(p.note) : '') +
+      '<br><a href="' + gmapsLink(p) + '" target="_blank" rel="noopener">Chỉ đường</a>';
+    L.marker([p.lat, p.lng], {icon}).bindPopup(html).addTo(markerLayer);
+  });
+}
+
+function fitAll(){
+  if(!map || !places.length) return;
+  if(places.length === 1) map.setView([places[0].lat, places[0].lng], 16);
+  else map.fitBounds(places.map(p => [p.lat, p.lng]), {padding:[40,40], maxZoom:16});
+}
+
+function openMapTab(){
+  loadLeaflet().then(() => {
+    initMap();
+    setTimeout(() => map && map.invalidateSize(), 60);
+  }).catch(() => {
+    if(!map) $('map').textContent = 'Cần kết nối mạng để tải bản đồ lần đầu.';
+  });
+}
+
+function renderPlaces(){
+  const box = $('placeList');
+  if(!places.length){
+    box.innerHTML = '<div class="card small" style="text-align:center">Chưa có quán nào. Thêm quán đầu tiên ở trên nhé!</div>';
+    return;
+  }
+  box.innerHTML = '';
+  places.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'card place';
+    d.innerHTML = '<div class="pname">' + esc(p.name) + '</div>' +
+      (p.note ? '<div class="pnote">' + esc(p.note) + '</div>' : '') +
+      '<div class="acts">' +
+      '<button data-a="go">Xem trên map</button>' +
+      '<a href="' + gmapsLink(p) + '" target="_blank" rel="noopener">Chỉ đường</a>' +
+      '<button data-a="edit">Sửa</button>' +
+      '<button data-a="del" class="del">Xoá</button></div>';
+    d.querySelector('[data-a=go]').onclick = () => {
+      if(!map) return;
+      document.querySelector('main').scrollTo({top:0, behavior:'smooth'});
+      map.flyTo([p.lat, p.lng], 17);
+      markerLayer.eachLayer(l => { const ll = l.getLatLng(); if(ll.lat === p.lat && ll.lng === p.lng) l.openPopup(); });
+    };
+    d.querySelector('[data-a=edit]').onclick = () => startEdit(p.id);
+    d.querySelector('[data-a=del]').onclick = () => {
+      if(!confirm('Xoá "' + p.name + '"?')) return;
+      places = places.filter(x => x.id !== p.id);
+      savePlaces(); renderPlaces(); drawMarkers();
+      if(editId === p.id) resetForm();
+    };
+    box.appendChild(d);
+  });
+}
+
+function resetForm(){
+  editId = null;
+  $('pName').value = $('pLL').value = $('pNote').value = '';
+  $('formTitle').textContent = 'Thêm quán';
+  $('pSave').textContent = 'Thêm vào bản đồ';
+  $('pCancel').style.display = 'none';
+}
+
+function startEdit(id){
+  const p = places.find(x => x.id === id);
+  if(!p) return;
+  editId = id;
+  $('pName').value = p.name;
+  $('pLL').value = p.lat + ', ' + p.lng;
+  $('pNote').value = p.note || '';
+  $('formTitle').textContent = 'Sửa quán';
+  $('pSave').textContent = 'Lưu thay đổi';
+  $('pCancel').style.display = 'block';
+  $('pMsg').textContent = '';
+  $('pName').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+$('pCancel').addEventListener('click', () => { resetForm(); $('pMsg').textContent = ''; });
+$('pSave').addEventListener('click', () => {
+  const name = $('pName').value.trim();
+  const ll = parseLL($('pLL').value);
+  const note = $('pNote').value.trim();
+  if(!name){ $('pMsg').textContent = 'Nhập tên quán nhé.'; return; }
+  if(!ll){ $('pMsg').textContent = 'Toạ độ chưa đúng. Dán dạng: 10.7769, 106.7009'; return; }
+  let target;
+  if(editId){
+    target = places.find(x => x.id === editId);
+    Object.assign(target, {name, note, lat:ll.lat, lng:ll.lng});
+  } else {
+    target = {id: Date.now(), name, note, lat:ll.lat, lng:ll.lng};
+    places.unshift(target);
+  }
+  savePlaces();
+  resetForm();
+  $('pMsg').textContent = 'Đã lưu "' + name + '" ✓';
+  renderPlaces();
+  drawMarkers();
+  if(map){
+    document.querySelector('main').scrollTo({top:0, behavior:'smooth'});
+    map.flyTo([target.lat, target.lng], 16);
+  }
+});
+
+renderPlaces();
+
+// Mở lại tab đang xem lần trước
+try{ const t = localStorage.getItem('lastTab'); if(t && document.getElementById(t)) showTab(t); }catch(e){}
 
 // ---------- Offline ----------
 if('serviceWorker' in navigator){
