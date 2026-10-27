@@ -71,10 +71,10 @@ nav button.active{color:var(--accent);font-weight:600}
 .small{font-size:13px;color:var(--muted)}
 .settings{display:flex;flex-direction:column;gap:10px}
 .settings label{font-size:13px;color:var(--muted)}
-.settings input{
+.settings input,.settings select{
   width:100%;padding:11px 12px;border-radius:12px;border:1px solid rgba(255,92,138,.3);
   background:rgba(255,255,255,.6);color:#4a1d2e;font:inherit;font-size:16px;margin-top:4px}
-@media (prefers-color-scheme: dark){.settings input{background:rgba(255,255,255,.12);color:var(--text)}}
+@media (prefers-color-scheme: dark){.settings input,.settings select{background:rgba(255,255,255,.12);color:var(--text)}}
 .btn{margin-top:4px;padding:12px;border:0;border-radius:12px;font:inherit;font-weight:600;
   background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
 .empty{text-align:center;margin-top:20vh;color:var(--muted)}
@@ -97,6 +97,11 @@ nav button.active{color:var(--accent);font-weight:600}
 .place .acts .del{color:#d33;border-color:rgba(221,51,51,.35)}
 .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(255,92,138,.4)}
 .hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px}
+.chip{flex:none;font:inherit;font-size:13px;padding:7px 12px;border-radius:99px;
+  border:1px solid rgba(255,92,138,.35);background:var(--card);color:var(--text)}
+.chip.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
+.ptype{font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
 </style>
 </head>
 <body>
@@ -147,13 +152,15 @@ nav button.active{color:var(--accent);font-weight:600}
 
   <!-- TAB 2: Bản đồ quán ăn -->
   <section class="tab" id="tab-map">
-    <h2 class="title">🍜 Quán ngon</h2>
+    <h2 class="title">🗺️ Bản đồ của mình</h2>
     <div id="map">Đang tải bản đồ…</div>
+    <div class="chips" id="filters"></div>
 
     <div class="card">
-      <h3 id="formTitle">Thêm quán</h3>
+      <h3 id="formTitle">Thêm địa điểm</h3>
       <div class="settings">
-        <div><label>Tên quán</label><input id="pName" placeholder="VD: Phở Hòa Pasteur"></div>
+        <div><label>Tên địa điểm</label><input id="pName" placeholder="VD: Phở Hòa Pasteur"></div>
+        <div><label>Loại</label><select id="pType"></select></div>
         <div><label>Toạ độ (copy từ Google Maps)</label><input id="pLL" placeholder="10.7769, 106.7009" autocapitalize="off" autocorrect="off"></div>
         <div><label>Ghi chú (không bắt buộc)</label><input id="pNote" placeholder="Món nên gọi, giá, giờ mở cửa..."></div>
         <button class="btn" id="pSave">Thêm vào bản đồ</button>
@@ -169,7 +176,7 @@ nav button.active{color:var(--accent);font-weight:600}
 
 <nav>
   <button class="active" data-tab="tab-love"><span class="ic">💗</span>Yêu nhau</button>
-  <button data-tab="tab-map"><span class="ic">🍜</span>Quán ngon</button>
+  <button data-tab="tab-map"><span class="ic">🗺️</span>Bản đồ</button>
 </nav>
 
 <script>
@@ -282,6 +289,18 @@ let places = [];
 try{ places = JSON.parse(localStorage.getItem('places') || '[]'); }catch(e){ places = []; }
 let editId = null;
 
+const TYPES = {
+  food:   {icon:'🍜', label:'Quán ăn'},
+  cafe:   {icon:'☕', label:'Quán cà phê'},
+  office: {icon:'🏢', label:'Văn phòng'},
+  home:   {icon:'🏠', label:'Nhà'},
+  fun:    {icon:'🎡', label:'Vui chơi / Du lịch'},
+  other:  {icon:'📍', label:'Khác'}
+};
+let filter = 'all';
+const typeOf = p => TYPES[p.type] ? p.type : 'food';   // địa điểm cũ chưa có loại = quán ăn
+const visible = () => places.filter(p => filter === 'all' || typeOf(p) === filter);
+
 function savePlaces(){ try{ localStorage.setItem('places', JSON.stringify(places)); }catch(e){} }
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function gmapsLink(p){ return 'https://www.google.com/maps/search/?api=1&query=' + p.lat + ',' + p.lng; }
@@ -334,18 +353,33 @@ function initMap(){
 function drawMarkers(){
   if(!map) return;
   markerLayer.clearLayers();
-  const icon = L.divIcon({className:'pin', html:'🍜', iconSize:[30,30], iconAnchor:[15,28], popupAnchor:[0,-26]});
-  places.forEach(p => {
-    const html = '<b>' + esc(p.name) + '</b>' + (p.note ? '<br>' + esc(p.note) : '') +
+  visible().forEach(p => {
+    const t = TYPES[typeOf(p)];
+    const icon = L.divIcon({className:'pin', html:t.icon, iconSize:[30,30], iconAnchor:[15,28], popupAnchor:[0,-26]});
+    const html = '<b>' + t.icon + ' ' + esc(p.name) + '</b><br><i>' + t.label + '</i>' +
+      (p.note ? '<br>' + esc(p.note) : '') +
       '<br><a href="' + gmapsLink(p) + '" target="_blank" rel="noopener">Chỉ đường</a>';
     L.marker([p.lat, p.lng], {icon}).bindPopup(html).addTo(markerLayer);
   });
 }
 
 function fitAll(){
-  if(!map || !places.length) return;
-  if(places.length === 1) map.setView([places[0].lat, places[0].lng], 16);
-  else map.fitBounds(places.map(p => [p.lat, p.lng]), {padding:[40,40], maxZoom:16});
+  const v = visible();
+  if(!map || !v.length) return;
+  if(v.length === 1) map.setView([v[0].lat, v[0].lng], 16);
+  else map.fitBounds(v.map(p => [p.lat, p.lng]), {padding:[40,40], maxZoom:16});
+}
+
+function renderChips(){
+  const box = $('filters');
+  box.innerHTML = '';
+  [['all', 'Tất cả'], ...Object.entries(TYPES).map(([k, t]) => [k, t.icon + ' ' + t.label])].forEach(([k, label]) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (filter === k ? ' on' : '');
+    b.textContent = label;
+    b.onclick = () => { filter = k; renderChips(); renderPlaces(); drawMarkers(); fitAll(); };
+    box.appendChild(b);
+  });
 }
 
 function openMapTab(){
@@ -359,15 +393,18 @@ function openMapTab(){
 
 function renderPlaces(){
   const box = $('placeList');
-  if(!places.length){
-    box.innerHTML = '<div class="card small" style="text-align:center">Chưa có quán nào. Thêm quán đầu tiên ở trên nhé!</div>';
+  const list = visible();
+  if(!list.length){
+    box.innerHTML = '<div class="card small" style="text-align:center">' +
+      (places.length ? 'Chưa có địa điểm nào thuộc loại này.' : 'Chưa có địa điểm nào. Thêm địa điểm đầu tiên ở trên nhé!') + '</div>';
     return;
   }
   box.innerHTML = '';
-  places.forEach(p => {
+  list.forEach(p => {
+    const t = TYPES[typeOf(p)];
     const d = document.createElement('div');
     d.className = 'card place';
-    d.innerHTML = '<div class="pname">' + esc(p.name) + '</div>' +
+    d.innerHTML = '<div class="pname">' + t.icon + ' ' + esc(p.name) + '<span class="ptype">' + t.label + '</span></div>' +
       (p.note ? '<div class="pnote">' + esc(p.note) + '</div>' : '') +
       '<div class="acts">' +
       '<button data-a="go">Xem trên map</button>' +
@@ -394,7 +431,7 @@ function renderPlaces(){
 function resetForm(){
   editId = null;
   $('pName').value = $('pLL').value = $('pNote').value = '';
-  $('formTitle').textContent = 'Thêm quán';
+  $('formTitle').textContent = 'Thêm địa điểm';
   $('pSave').textContent = 'Thêm vào bản đồ';
   $('pCancel').style.display = 'none';
 }
@@ -406,7 +443,8 @@ function startEdit(id){
   $('pName').value = p.name;
   $('pLL').value = p.lat + ', ' + p.lng;
   $('pNote').value = p.note || '';
-  $('formTitle').textContent = 'Sửa quán';
+  $('pType').value = typeOf(p);
+  $('formTitle').textContent = 'Sửa địa điểm';
   $('pSave').textContent = 'Lưu thay đổi';
   $('pCancel').style.display = 'block';
   $('pMsg').textContent = '';
@@ -418,19 +456,23 @@ $('pSave').addEventListener('click', () => {
   const name = $('pName').value.trim();
   const ll = parseLL($('pLL').value);
   const note = $('pNote').value.trim();
-  if(!name){ $('pMsg').textContent = 'Nhập tên quán nhé.'; return; }
+  const type = $('pType').value;
+  if(!name){ $('pMsg').textContent = 'Nhập tên địa điểm nhé.'; return; }
   if(!ll){ $('pMsg').textContent = 'Toạ độ chưa đúng. Dán dạng: 10.7769, 106.7009'; return; }
   let target;
   if(editId){
     target = places.find(x => x.id === editId);
-    Object.assign(target, {name, note, lat:ll.lat, lng:ll.lng});
+    Object.assign(target, {name, note, type, lat:ll.lat, lng:ll.lng});
   } else {
-    target = {id: Date.now(), name, note, lat:ll.lat, lng:ll.lng};
+    target = {id: Date.now(), name, note, type, lat:ll.lat, lng:ll.lng};
     places.unshift(target);
   }
   savePlaces();
   resetForm();
+  $('pType').value = type;                       // giữ loại vừa chọn để thêm liên tiếp cho tiện
+  if(filter !== 'all' && filter !== type) filter = 'all';
   $('pMsg').textContent = 'Đã lưu "' + name + '" ✓';
+  renderChips();
   renderPlaces();
   drawMarkers();
   if(map){
@@ -439,6 +481,8 @@ $('pSave').addEventListener('click', () => {
   }
 });
 
+$('pType').innerHTML = Object.entries(TYPES).map(([k, t]) => '<option value="' + k + '">' + t.icon + ' ' + t.label + '</option>').join('');
+renderChips();
 renderPlaces();
 
 // Mở lại tab đang xem lần trước
