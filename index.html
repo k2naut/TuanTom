@@ -82,7 +82,7 @@ nav button.active{color:var(--accent);font-weight:600}
 
 /* Map tab */
 .title{margin:0 0 14px;font-size:26px;text-align:center}
-#map{height:46vh;min-height:300px;border-radius:20px;overflow:hidden;margin-bottom:14px;
+#map{height:46vh;min-height:300px;border-radius:20px;overflow:hidden;
   box-shadow:0 4px 18px rgba(255,92,138,.18);background:rgba(255,255,255,.4);z-index:0;
   display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:0}
 .pin{font-size:28px;line-height:1;text-align:center;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
@@ -102,6 +102,11 @@ nav button.active{color:var(--accent);font-weight:600}
   border:1px solid rgba(255,92,138,.35);background:var(--card);color:var(--text)}
 .chip.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
 .ptype{font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
+.mapwrap{position:relative;margin-bottom:14px}
+.locbtn{position:absolute;right:10px;bottom:30px;z-index:1000;width:44px;height:44px;border-radius:50%;
+  border:0;background:#fff;font-size:22px;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.locbtn:active{transform:scale(.94)}
+#locMsg:not(:empty){margin:-6px 0 12px;text-align:center}
 </style>
 </head>
 <body>
@@ -153,7 +158,11 @@ nav button.active{color:var(--accent);font-weight:600}
   <!-- TAB 2: Bản đồ quán ăn -->
   <section class="tab" id="tab-map">
     <h2 class="title">🗺️ Bản đồ của mình</h2>
-    <div id="map">Đang tải bản đồ…</div>
+    <div class="mapwrap">
+      <div id="map">Đang tải bản đồ…</div>
+      <button class="locbtn" id="locBtn" type="button" aria-label="Vị trí của tôi">🎯</button>
+    </div>
+    <div class="small" id="locMsg"></div>
     <div class="chips" id="filters"></div>
 
     <div class="card">
@@ -161,7 +170,10 @@ nav button.active{color:var(--accent);font-weight:600}
       <div class="settings">
         <div><label>Tên địa điểm</label><input id="pName" placeholder="VD: Phở Hòa Pasteur"></div>
         <div><label>Loại</label><select id="pType"></select></div>
-        <div><label>Toạ độ (copy từ Google Maps)</label><input id="pLL" placeholder="10.7769, 106.7009" autocapitalize="off" autocorrect="off"></div>
+        <div><label>Toạ độ (copy từ Google Maps hoặc dùng vị trí hiện tại)</label>
+          <input id="pLL" placeholder="10.7769, 106.7009" autocapitalize="off" autocorrect="off">
+          <button class="btn ghost" id="pHere" type="button" style="width:100%;margin-top:8px">📍 Dùng vị trí hiện tại</button>
+        </div>
         <div><label>Ghi chú (không bắt buộc)</label><input id="pNote" placeholder="Món nên gọi, giá, giờ mở cửa..."></div>
         <button class="btn" id="pSave">Thêm vào bản đồ</button>
         <button class="btn ghost" id="pCancel" style="display:none">Huỷ sửa</button>
@@ -450,6 +462,53 @@ function startEdit(id){
   $('pMsg').textContent = '';
   $('pName').scrollIntoView({behavior:'smooth', block:'center'});
 }
+
+// ----- Vị trí hiện tại -----
+var meMarker = null, meCircle = null;
+
+function getPos(){
+  return new Promise((res, rej) => {
+    if(!navigator.geolocation) return rej({code:0});
+    navigator.geolocation.getCurrentPosition(p => res(p.coords), e => rej(e),
+      {enableHighAccuracy:true, timeout:15000, maximumAge:10000});
+  });
+}
+function geoErr(e){
+  if(e && e.code === 1) return 'Chưa được cấp quyền vị trí. Vào Cài đặt iPhone → Quyền riêng tư & Bảo mật → Dịch vụ định vị, bật cho Safari rồi thử lại.';
+  if(e && e.code === 3) return 'Lấy vị trí quá lâu, thử lại ở chỗ thoáng hơn nhé.';
+  return 'Không lấy được vị trí. Kiểm tra mạng và quyền vị trí rồi thử lại.';
+}
+function showMe(c){
+  if(!map) return;
+  const ll = [c.latitude, c.longitude], r = c.accuracy || 30;
+  if(!meMarker){
+    meCircle = L.circle(ll, {radius:r, color:'#2f7cf6', weight:1, fillOpacity:.12}).addTo(map);
+    meMarker = L.circleMarker(ll, {radius:8, color:'#fff', weight:3, fillColor:'#2f7cf6', fillOpacity:1}).addTo(map);
+  } else {
+    meCircle.setLatLng(ll).setRadius(r);
+    meMarker.setLatLng(ll);
+  }
+}
+
+// Nút 🎯 trên bản đồ: bay tới vị trí của mình
+$('locBtn').addEventListener('click', () => {
+  $('locMsg').textContent = 'Đang lấy vị trí…';
+  loadLeaflet().then(() => { initMap(); return getPos(); }).then(c => {
+    showMe(c);
+    map.flyTo([c.latitude, c.longitude], 17);
+    $('locMsg').textContent = 'Vị trí của bạn (sai số khoảng ' + Math.round(c.accuracy) + ' m)';
+  }).catch(e => { $('locMsg').textContent = geoErr(e); });
+});
+
+// Nút trong form: điền toạ độ = vị trí hiện tại
+$('pHere').addEventListener('click', () => {
+  $('pMsg').textContent = 'Đang lấy vị trí…';
+  getPos().then(c => {
+    $('pLL').value = c.latitude.toFixed(6) + ', ' + c.longitude.toFixed(6);
+    $('pMsg').textContent = 'Đã điền vị trí hiện tại (sai số khoảng ' + Math.round(c.accuracy) + ' m). Nhập tên rồi bấm Thêm.';
+    showMe(c);
+  }).catch(e => { $('pMsg').textContent = geoErr(e); });
+});
 
 $('pCancel').addEventListener('click', () => { resetForm(); $('pMsg').textContent = ''; });
 $('pSave').addEventListener('click', () => {
