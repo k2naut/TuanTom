@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Của chúng mình</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff5c8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Của mình">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root{
+  --bg1:#ffe3ec; --bg2:#ffc2d6; --card:rgba(255,255,255,.75);
+  --text:#4a1d2e; --muted:#9a6b7c; --accent:#ff5c8a; --accent2:#ff8fab;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg1:#2a1020; --bg2:#431a30; --card:rgba(255,255,255,.08);
+    --text:#ffe9f0; --muted:#d9a3b6; --accent:#ff6b97; --accent2:#ff8fab; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  color:var(--text);
+  background:linear-gradient(160deg,var(--bg1),var(--bg2)) fixed;
+  display:flex;flex-direction:column;
+}
+main{flex:1;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 24px) 20px 24px;}
+.tab{display:none;max-width:480px;margin:0 auto;animation:fade .25s ease}
+.tab.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* Tab bar */
+nav{
+  display:flex;background:var(--card);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid rgba(255,255,255,.3);
+  padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);
+}
+nav button{
+  flex:1;background:none;border:0;color:var(--muted);
+  font:inherit;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;
+}
+nav button .ic{font-size:24px;line-height:1}
+nav button.active{color:var(--accent);font-weight:600}
+
+/* Love tab */
+.names{text-align:center;font-size:18px;color:var(--muted);margin:4px 0 18px}
+.heart{font-size:64px;text-align:center;animation:beat 1.6s infinite}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.15)}30%{transform:scale(1)}45%{transform:scale(1.1)}}
+.big{text-align:center;margin:6px 0 4px}
+.big .num{font-size:84px;font-weight:800;line-height:1;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.big .unit{font-size:20px;color:var(--muted);margin-top:4px}
+.since{text-align:center;color:var(--muted);font-size:14px;margin-bottom:22px}
+.card{background:var(--card);border-radius:20px;padding:16px 18px;margin-bottom:14px;
+  box-shadow:0 4px 18px rgba(255,92,138,.12)}
+.card h3{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.row3{display:flex;text-align:center}
+.row3 div{flex:1}
+.row3 b{display:block;font-size:28px}
+.row3 span{font-size:13px;color:var(--muted)}
+.line{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0}
+.line .v{font-weight:700;color:var(--accent)}
+.bar{height:8px;border-radius:99px;background:rgba(255,92,138,.18);overflow:hidden;margin:8px 0 6px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px}
+.small{font-size:13px;color:var(--muted)}
+.settings{display:flex;flex-direction:column;gap:10px}
+.settings label{font-size:13px;color:var(--muted)}
+.settings input{
+  width:100%;padding:11px 12px;border-radius:12px;border:1px solid rgba(255,92,138,.3);
+  background:rgba(255,255,255,.6);color:#4a1d2e;font:inherit;font-size:16px;margin-top:4px}
+@media (prefers-color-scheme: dark){.settings input{background:rgba(255,255,255,.12);color:var(--text)}}
+.btn{margin-top:4px;padding:12px;border:0;border-radius:12px;font:inherit;font-weight:600;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.empty{text-align:center;margin-top:20vh;color:var(--muted)}
+.empty .ic{font-size:56px}
+</style>
+</head>
+<body>
+
+<main>
+  <!-- TAB 1: Ngày yêu nhau -->
+  <section class="tab active" id="tab-love">
+    <div class="heart">💗</div>
+    <div class="names" id="names"></div>
+    <div class="big">
+      <div class="num" id="days">0</div>
+      <div class="unit">ngày yêu nhau</div>
+    </div>
+    <div class="since" id="since"></div>
+
+    <div class="card">
+      <h3>Tính theo thời gian</h3>
+      <div class="row3">
+        <div><b id="yy">0</b><span>năm</span></div>
+        <div><b id="mm">0</b><span>tháng</span></div>
+        <div><b id="dd">0</b><span>ngày</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Cột mốc tiếp theo</h3>
+      <div class="line"><span id="msName">—</span><span class="v" id="msLeft">—</span></div>
+      <div class="bar"><i id="msBar" style="width:0%"></i></div>
+      <div class="small" id="msDate"></div>
+    </div>
+
+    <div class="card">
+      <h3>Kỷ niệm tiếp theo</h3>
+      <div class="line"><span id="anName">—</span><span class="v" id="anLeft">—</span></div>
+      <div class="small" id="anDate"></div>
+    </div>
+
+    <div class="card">
+      <h3>Cài đặt</h3>
+      <div class="settings">
+        <div><label>Tên của bạn</label><input id="n1" placeholder="Bạn"></div>
+        <div><label>Tên người ấy</label><input id="n2" placeholder="Người ấy"></div>
+        <div><label>Ngày bắt đầu yêu</label><input id="start" type="date"></div>
+        <button class="btn" id="save">Lưu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: chỗ trống cho tính năng sau -->
+  <section class="tab" id="tab-more">
+    <div class="empty">
+      <div class="ic">✨</div>
+      <p>Tính năng mới sẽ xuất hiện ở đây</p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button class="active" data-tab="tab-love"><span class="ic">💗</span>Yêu nhau</button>
+  <button data-tab="tab-more"><span class="ic">✨</span>Sắp có</button>
+</nav>
+
+<script>
+// ---------- Tabs ----------
+const tabs = document.querySelectorAll('.tab');
+const btns = document.querySelectorAll('nav button');
+function showTab(id){
+  tabs.forEach(t => t.classList.toggle('active', t.id === id));
+  btns.forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  try{ localStorage.setItem('lastTab', id); }catch(e){}
+}
+btns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+try{ const t = localStorage.getItem('lastTab'); if(t && document.getElementById(t)) showTab(t); }catch(e){}
+
+// ---------- Settings ----------
+const DEFAULTS = { n1:'', n2:'', start:'2023-04-06' };
+function load(){
+  try{ return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('love') || '{}')); }
+  catch(e){ return {...DEFAULTS}; }
+}
+function save(s){ try{ localStorage.setItem('love', JSON.stringify(s)); }catch(e){} }
+
+// ---------- Date helpers (dùng UTC để không bị lệch giờ mùa hè) ----------
+const DAY = 86400000;
+function parse(str){ const [y,m,d] = str.split('-').map(Number); return {y, m, d}; }
+function utc(y,m,d){ return Date.UTC(y, m-1, d); }
+function todayParts(){ const n = new Date(); return {y:n.getFullYear(), m:n.getMonth()+1, d:n.getDate()}; }
+function diffDays(a,b){ return Math.round((utc(b.y,b.m,b.d) - utc(a.y,a.m,a.d)) / DAY); }
+function fmt(y,m,d){ return String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0') + '/' + y; }
+function addDays(p, n){ const t = new Date(utc(p.y,p.m,p.d) + n*DAY); return {y:t.getUTCFullYear(), m:t.getUTCMonth()+1, d:t.getUTCDate()}; }
+function daysInMonth(y,m){ return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+
+function ymd(start, today){
+  let y = today.y - start.y, m = today.m - start.m, d = today.d - start.d;
+  if(d < 0){
+    m--;
+    let pm = today.m - 1, py = today.y;
+    if(pm === 0){ pm = 12; py--; }
+    d += daysInMonth(py, pm);
+  }
+  if(m < 0){ y--; m += 12; }
+  return {y, m, d};
+}
+
+// ---------- Render ----------
+const $ = id => document.getElementById(id);
+
+function render(){
+  const s = load();
+  const start = parse(s.start);
+  const today = todayParts();
+  const total = diffDays(start, today);
+
+  $('days').textContent = total.toLocaleString('vi-VN');
+  $('since').textContent = 'Từ ngày ' + fmt(start.y, start.m, start.d);
+  const a = s.n1 || 'Bạn', b = s.n2 || 'Người ấy';
+  $('names').textContent = a + ' 💕 ' + b;
+
+  if(total >= 0){
+    const r = ymd(start, today);
+    $('yy').textContent = r.y; $('mm').textContent = r.m; $('dd').textContent = r.d;
+  } else {
+    $('yy').textContent = $('mm').textContent = $('dd').textContent = '0';
+  }
+
+  // Cột mốc theo số ngày
+  const marks = [100,200,300,365,500,600,700,730,800,900,1000,1095,1200,1300,1400,1461,1500,1600,1700,1800,1826,2000,2190,2500,3000,3650,5000,7300,10000];
+  let next = marks.find(m => m > total);
+  if(!next) next = (Math.floor(total/1000)+1)*1000;
+  let prev = [0, ...marks].filter(m => m <= total).pop() || 0;
+  if(prev >= next) prev = 0;
+  const left = next - total;
+  $('msName').textContent = 'Ngày thứ ' + next.toLocaleString('vi-VN');
+  $('msLeft').textContent = left === 1 ? 'Ngày mai' : 'Còn ' + left + ' ngày';
+  $('msBar').style.width = Math.max(0, Math.min(100, (total - prev) / (next - prev) * 100)) + '%';
+  const nd = addDays(start, next);
+  $('msDate').textContent = 'Vào ngày ' + fmt(nd.y, nd.m, nd.d);
+
+  // Kỷ niệm hằng năm
+  let yr = today.y;
+  let ann = {y:yr, m:start.m, d:start.d};
+  if(diffDays(today, ann) < 0){ yr++; ann = {y:yr, m:start.m, d:start.d}; }
+  const toAnn = diffDays(today, ann);
+  const nth = ann.y - start.y;
+  $('anName').textContent = 'Kỷ niệm ' + nth + ' năm';
+  $('anLeft').textContent = toAnn === 0 ? 'Hôm nay! 🎉' : (toAnn === 1 ? 'Ngày mai' : 'Còn ' + toAnn + ' ngày');
+  $('anDate').textContent = 'Vào ngày ' + fmt(ann.y, ann.m, ann.d);
+}
+
+// Điền form
+(function(){
+  const s = load();
+  $('n1').value = s.n1; $('n2').value = s.n2; $('start').value = s.start;
+})();
+$('save').addEventListener('click', () => {
+  const start = $('start').value || DEFAULTS.start;
+  save({ n1:$('n1').value.trim(), n2:$('n2').value.trim(), start });
+  render();
+  window.scrollTo(0,0); document.querySelector('main').scrollTo({top:0, behavior:'smooth'});
+});
+
+render();
+// Cập nhật khi qua nửa đêm / mở lại app
+document.addEventListener('visibilitychange', () => { if(!document.hidden) render(); });
+setInterval(render, 60000);
+
+// ---------- Offline ----------
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
