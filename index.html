@@ -73,9 +73,16 @@ main{position:relative;z-index:1;flex:1;overflow-y:auto;
 .big .num{font-size:84px;font-weight:800;line-height:1;color:#fff;text-shadow:0 3px 16px rgba(0,0,0,.55)}
 .big .unit{font-size:20px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.6);margin-top:4px}
 .since{text-align:center;color:rgba(255,255,255,.85);text-shadow:0 2px 8px rgba(0,0,0,.6);font-size:14px;margin-bottom:22px}
-.card{background:var(--card);border-radius:20px;padding:16px 18px;margin-bottom:14px;
+.card{background:var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:20px;padding:16px 18px;margin-bottom:14px;
   box-shadow:0 4px 18px rgba(255,92,138,.12)}
 .card h3{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.ms{display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid rgba(255,92,138,.18)}
+.ms:first-child{border-top:0;padding-top:2px}
+.ms .mic{font-size:24px;width:32px;text-align:center;flex:none}
+.ms .mt{flex:1;min-width:0}
+.ms .mt b{display:block;font-size:16px}
+.ms .mt span{font-size:12.5px;color:var(--muted)}
+.ms .mleft{font-weight:700;color:var(--accent);font-size:14px;white-space:nowrap;text-align:right}
 .row3{display:flex;text-align:center}
 .row3 div{flex:1}
 .row3 b{display:block;font-size:28px}
@@ -152,16 +159,9 @@ main{position:relative;z-index:1;flex:1;overflow-y:auto;
     </div>
 
     <div class="card">
-      <h3>Cột mốc tiếp theo</h3>
-      <div class="line"><span id="msName">—</span><span class="v" id="msLeft">—</span></div>
-      <div class="bar"><i id="msBar" style="width:0%"></i></div>
-      <div class="small" id="msDate"></div>
-    </div>
-
-    <div class="card">
-      <h3>Kỷ niệm tiếp theo</h3>
-      <div class="line"><span id="anName">—</span><span class="v" id="anLeft">—</span></div>
-      <div class="small" id="anDate"></div>
+      <h3>Cột mốc sắp tới</h3>
+      <div id="msList"></div>
+      <button class="btn ghost" id="msMore" type="button" style="width:100%;margin-top:8px"></button>
     </div>
 
     <div class="card">
@@ -170,6 +170,7 @@ main{position:relative;z-index:1;flex:1;overflow-y:auto;
         <div><label>Tên của bạn</label><input id="n1" placeholder="Bạn"></div>
         <div><label>Tên người ấy</label><input id="n2" placeholder="Người ấy"></div>
         <div><label>Ngày bắt đầu yêu</label><input id="start" type="date"></div>
+        <div><label>Số ngày đẹp riêng (cách nhau dấu phẩy)</label><input id="extra" placeholder="VD: 1705, 2000" inputmode="numeric"></div>
         <button class="btn" id="save">Lưu</button>
       </div>
     </div>
@@ -250,7 +251,7 @@ function showTab(id){
 }
 
 // ---------- Settings ----------
-const DEFAULTS = { n1:'', n2:'', start:'2023-04-06' };
+const DEFAULTS = { n1:'', n2:'', start:'2023-04-06', extra:'1705' };
 function load(){
   try{ return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('love') || '{}')); }
   catch(e){ return {...DEFAULTS}; }
@@ -300,41 +301,92 @@ function render(){
     $('yy').textContent = $('mm').textContent = $('dd').textContent = '0';
   }
 
-  // Cột mốc theo số ngày
-  const marks = [100,200,300,365,500,600,700,730,800,900,1000,1095,1200,1300,1400,1461,1500,1600,1700,1800,1826,2000,2190,2500,3000,3650,5000,7300,10000];
-  let next = marks.find(m => m > total);
-  if(!next) next = (Math.floor(total/1000)+1)*1000;
-  let prev = [0, ...marks].filter(m => m <= total).pop() || 0;
-  if(prev >= next) prev = 0;
-  const left = next - total;
-  $('msName').textContent = 'Ngày thứ ' + next.toLocaleString('vi-VN');
-  $('msLeft').textContent = left === 1 ? 'Ngày mai' : 'Còn ' + left + ' ngày';
-  $('msBar').style.width = Math.max(0, Math.min(100, (total - prev) / (next - prev) * 100)) + '%';
-  const nd = addDays(start, next);
-  $('msDate').textContent = 'Vào ngày ' + fmt(nd.y, nd.m, nd.d);
+  renderMilestones(start, today, s);
+}
 
-  // Kỷ niệm hằng năm
-  let yr = today.y;
-  let ann = {y:yr, m:start.m, d:start.d};
-  if(diffDays(today, ann) < 0){ yr++; ann = {y:yr, m:start.m, d:start.d}; }
-  const toAnn = diffDays(today, ann);
-  const nth = ann.y - start.y;
-  $('anName').textContent = 'Kỷ niệm ' + nth + ' năm';
-  $('anLeft').textContent = toAnn === 0 ? 'Hôm nay! 🎉' : (toAnn === 1 ? 'Ngày mai' : 'Còn ' + toAnn + ' ngày');
-  $('anDate').textContent = 'Vào ngày ' + fmt(ann.y, ann.m, ann.d);
+// ---------- Cột mốc sắp tới ----------
+var msAll = false;
+const WD = ['CN','T2','T3','T4','T5','T6','T7'];
+function addMonths(p, n){
+  const t = p.m - 1 + n;
+  const y = p.y + Math.floor(t / 12), m = t % 12 + 1;
+  return {y, m, d: Math.min(p.d, daysInMonth(y, m))};
+}
+const keyOf = p => utc(p.y, p.m, p.d);
+
+function buildMilestones(start, extraStr){
+  const out = [];
+
+  // 1) Mốc theo số ngày: số tròn, số đẹp, số riêng của bạn
+  const nums = new Map();
+  const put = (n, tag, icon, force) => { if(n > 0 && (force || !nums.has(n))) nums.set(n, {tag, icon}); };
+  for(let n = 100; n <= 10000; n += 100) put(n, n % 1000 === 0 ? 'tròn nghìn ngày' : 'số tròn', '🎯');
+  for(let d = 1; d <= 9; d++){ put(d * 111, 'số đẹp', '✨', true); put(d * 1111, 'số đẹp', '✨', true); }
+  [1234, 2345, 3456, 4567, 5678, 6789, 1314, 5200].forEach(n => put(n, 'số đẹp', '✨', true));
+  (extraStr || '').split(/[^\d]+/).map(Number).filter(n => n > 0 && n < 40000).forEach(n => put(n, 'số của bạn', '💝', true));
+  nums.forEach((v, n) => out.push({date: addDays(start, n), title: 'Ngày thứ ' + n.toLocaleString('vi-VN'), tag: v.tag, icon: v.icon}));
+
+  // 2) Mốc theo tháng/năm: mỗi năm, mỗi 6 tháng, và các tháng lặp số (11, 22, 33...)
+  for(let n = 1; n <= 240; n++){
+    if(n % 12 === 0){
+      out.push({date: addMonths(start, n), title: 'Kỷ niệm ' + (n / 12) + ' năm', tag: 'tròn năm', icon: '🎂'});
+    } else if(n % 6 === 0 || n % 11 === 0){
+      const y = Math.floor(n / 12);
+      out.push({date: addMonths(start, n), title: 'Tròn ' + n + ' tháng', tag: (y ? y + ' năm ' : '') + (n % 12) + ' tháng', icon: '📅'});
+    }
+  }
+
+  // 3) Kiểu "4 năm 4 tháng 4 ngày"
+  for(let y = 1; y <= 11; y++){
+    const d = addDays(addMonths(start, y * 12 + y), y);
+    const r = ymd(start, d);
+    if(r.y === y && r.m === y && r.d === y)
+      out.push({date: d, title: y + ' năm ' + y + ' tháng ' + y + ' ngày', tag: 'số đẹp', icon: '🍀'});
+  }
+
+  return out.sort((a, b) => keyOf(a.date) - keyOf(b.date));
+}
+
+function renderMilestones(start, today, s){
+  const all = buildMilestones(start, s.extra);
+  const t0 = keyOf(today);
+  const upcoming = all.filter(m => keyOf(m.date) >= t0);
+  const past = all.filter(m => keyOf(m.date) < t0);
+  const prevT = past.length ? keyOf(past[past.length - 1].date) : keyOf(start);
+  const list = upcoming.slice(0, msAll ? 25 : 6);
+
+  $('msList').innerHTML = list.map((m, i) => {
+    const t = keyOf(m.date);
+    const left = Math.round((t - t0) / DAY);
+    const leftTxt = left === 0 ? 'Hôm nay! 🎉' : (left === 1 ? 'Ngày mai' : 'Còn ' + left + ' ngày');
+    let bar = '';
+    if(i === 0 && t > prevT){
+      const pct = Math.max(0, Math.min(100, (t0 - prevT) / (t - prevT) * 100));
+      bar = '<div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+    }
+    return '<div class="ms"><div class="mic">' + m.icon + '</div><div class="mt"><b>' + esc(m.title) + '</b>' +
+      '<span>' + WD[new Date(t).getUTCDay()] + ', ' + fmt(m.date.y, m.date.m, m.date.d) + ' · ' + esc(m.tag) + '</span>' + bar +
+      '</div><div class="mleft">' + leftTxt + '</div></div>';
+  }).join('');
+
+  const more = $('msMore');
+  more.style.display = upcoming.length > 6 ? 'block' : 'none';
+  more.textContent = msAll ? 'Thu gọn' : 'Xem thêm cột mốc';
 }
 
 // Điền form
 (function(){
   const s = load();
-  $('n1').value = s.n1; $('n2').value = s.n2; $('start').value = s.start;
+  $('n1').value = s.n1; $('n2').value = s.n2; $('start').value = s.start; $('extra').value = s.extra;
 })();
 $('save').addEventListener('click', () => {
   const start = $('start').value || DEFAULTS.start;
-  save({ n1:$('n1').value.trim(), n2:$('n2').value.trim(), start });
+  save({ n1:$('n1').value.trim(), n2:$('n2').value.trim(), start, extra:$('extra').value.trim() });
   render();
   window.scrollTo(0,0); document.querySelector('main').scrollTo({top:0, behavior:'smooth'});
 });
+
+$('msMore').addEventListener('click', () => { msAll = !msAll; render(); });
 
 render();
 // Cập nhật khi qua nửa đêm / mở lại app
